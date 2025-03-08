@@ -7,6 +7,13 @@ const path=require('path')
 
 //deploy react build in this server
 app.use(exp.static(path.join(__dirname,'../client/build')))
+
+// Middleware to serve static files (images) from the uploads directory
+const uploadsDirectory = path.join(__dirname, 'uploads');
+app.use('/uploads', exp.static(uploadsDirectory));
+
+
+
 //to parse the body of req
 app.use(exp.json())
 

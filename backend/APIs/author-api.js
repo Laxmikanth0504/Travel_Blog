@@ -1,8 +1,10 @@
 //create author api app
 const exp=require('express');
 const authorApp=exp.Router();
+const path = require('path');
 const expressAsyncHandler=require('express-async-handler')
 const bcryptjs=require('bcryptjs')
+const multer = require('multer');
 const jwt=require('jsonwebtoken')
 const verifyToken=require('../Middlewares/verifyToken')
 
@@ -17,15 +19,27 @@ authorApp.use((req,res,next)=>{
 })
 
 
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+      cb(null, 'uploads/');
+    },
+    filename: (req, file, cb) => {
+      cb(null, Date.now() + path.extname(file.originalname));
+    }
+  });
+  
+  const upload = multer({ storage });
+
+
 //author registration route
-authorApp.post('/user',expressAsyncHandler(async(req,res)=>{
+authorApp.post('/author',expressAsyncHandler(async(req,res)=>{
     //get user resource from client
     const newUser=req.body;
     //check for duplicate user based on username
     const dbuser=await authorscollection.findOne({username:newUser.username})
     //if user found in db
     if(dbuser!==null){
-        res.send({message:"User existed"})
+        res.send({message:"Author existed"})
     }else{
         //hash the password
         const hashedPassword=await bcryptjs.hash(newUser.password,6)
@@ -62,30 +76,73 @@ authorApp.post('/login',expressAsyncHandler(async(req,res)=>{
     }
 }))
 
-//adding new article by author
-authorApp.post('/article',verifyToken,expressAsyncHandler(async(req,res)=>{
-    //get new article from client
-    const newArticle=req.body;
-    console.log(newArticle)
-    //post to artciles collection
-    await articlescollection.insertOne(newArticle)
-    //send res
-    res.send({message:"New article created"})
-}))
 
+authorApp.post('/article', upload.single('image'), async (req, res) => {
+    const article = {
+      title: req.body.title,
+      category: req.body.category,
+      content: req.body.content,
+      dateOfCreation: req.body.dateOfCreation,
+      dateOfModification: req.body.dateOfModification,
+      articleId: req.body.articleId,
+      username: req.body.username,
+      comments: JSON.parse(req.body.comments),
+      status: req.body.status,
+      image: req.file ? req.file.filename : null // Save the filename or path
+    };
+  
+    try {
+      let result = await articlescollection.insertOne(article);
+      res.json({ message: 'New article created', article });
+    } catch (error) {
+      console.error('Error:', error);
+      res.status(500).json({ message: 'An error occurred while creating the article' });
+    }
+  });
 
-//modify artcile by author
-authorApp.put('/article',verifyToken,expressAsyncHandler(async(req,res)=>{
-    //get modified article from client
-    const modifiedArticle=req.body;
-   
-    //update by article id
-   let result= await articlescollection.updateOne({articleId:modifiedArticle.articleId},{$set:{...modifiedArticle}})
-    let latestArticle=await articlescollection.findOne({articleId:modifiedArticle.articleId})
-    res.send({message:"Article modified",article:latestArticle})
-}))
+// Assuming 'authorApp' is your Express app instance
 
+// Route to delete the present article and save the modified article
+authorApp.put('/article', upload.single('image'), async (req, res) => {
+    try {
+      // Parse the editedArticle from the request body
+      const editedArticle = req.body.editedArticle ? JSON.parse(req.body.editedArticle) : null;
+  
+      if (!editedArticle) {
+        return res.status(400).json({ message: "Invalid article data" });
+      }
+  
+      // If there is an uploaded image, add the filename to editedArticle
+      if (req.file) {
+        editedArticle.image = req.file.filename;
+      }
+  
+      console.log(editedArticle);
+  
+      // Remove the present article
+      await articlescollection.deleteOne({ articleId: editedArticle.articleId });
+  
+      // Insert the modified article
+      const updatedArticle = await articlescollection.insertOne(editedArticle);
+  
+      res.status(200).json({ message: "Article modified", article: updatedArticle });
+    } catch (error) {
+      console.error('Error modifying article:', error);
+      res.status(500).json({ message: "Error modifying article" });
+    }
+  });  
 
+// Route to delete an article
+authorApp.delete('/article/:articleId', async (req, res) => {
+  const articleFromUrl = req.params.articleId;
+  console.log(articleFromUrl)
+  let re = await articlescollection.deleteOne({ articleId: articleFromUrl });
+  if (re.deletedCount > 0) {
+    res.send({ message: "article deleted" });
+  } else {
+    res.status(404).send({ message: "article not found" });
+  }
+});
 
 
 
@@ -115,7 +172,7 @@ authorApp.put('/article/:articleId',verifyToken,expressAsyncHandler(async(req,re
 
 
 
-//read articles of author
+//read articles of author 
 authorApp.get('/articles/:username',verifyToken,expressAsyncHandler(async(req,res)=>{
     //get author's username from url
     const authorName=req.params.username;

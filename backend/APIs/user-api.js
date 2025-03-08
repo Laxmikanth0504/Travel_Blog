@@ -78,12 +78,12 @@ userApp.get(
     "/articles", verifyToken,
     expressAsyncHandler(async (req, res) => {
         //get articlescollection from express app
-        const articlescollection = req.app.get("articlescollection");
         //get all articles
         let articlesList = await articlescollection
-            .find({ status: true })
+            .find()
             .toArray();
         //send res
+        console.log(articlesList)
         res.send({ message: "articles", payload: articlesList });
     })
 );
@@ -94,13 +94,17 @@ userApp.post(
     expressAsyncHandler(async (req, res) => {
         //get user comment obj
         const userComment = req.body;
+        console.log(userComment)
         const articleIdFromUrl = (+req.params.articleId);
+        console.log(articleIdFromUrl)
+        let strid=articleIdFromUrl.toString();
         //insert userComment object to comments array of article by id
         let result = await articlescollection.updateOne(
-            { articleId: articleIdFromUrl },
+            { articleId: strid },
             { $addToSet: { comments: userComment } }
         );
-        console.log(result);
+        console.log("Result:",result)
+        //console.log(result);
         res.send({ message: "Comment posted" });
     })
 );
